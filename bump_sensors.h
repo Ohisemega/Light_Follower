@@ -1,0 +1,163 @@
+// this #ifndef stops this file
+// from being included mored than
+// once by the compiler.
+#ifndef _BUMPSENSOR_H
+#define _BUMPSENSOR_H
+
+#define WINDOW_SIZE 15
+#define LEFT_BUMP_SENSOR 4
+#define RIGHT_BUMP_SENSOR 5
+#define NB_BS_PIN 2
+
+#define GAIN_CONST 150
+
+
+#define EMIT_PIN 11
+#define TIME_OUT 4000
+#define MIN_TIME  550
+#define CALIBRATION_TIME 3700000 
+// Class to operate the linesensor(s).
+class BumpSensor_c {
+  public:
+  
+    // Constructor, must exist.
+    BumpSensor_c() {
+
+    }
+    int INDEX = 0;
+    void initialise(){
+      for(int i = 0; i < NB_BS_PIN; ++i) pinMode(bs_pin[i], INPUT);
+      pinMode(EMIT_PIN, OUTPUT);
+      digitalWrite(EMIT_PIN, LOW);
+      Serial.println("***The setup is Complete");
+      delay(1000);
+    }
+
+    void Calibrate_Bump_Sensors(){
+      unsigned long temp_elapsed_time;
+      PT_Charge();
+      while(done == false){
+        for(int Which_Sensor = 0; Which_Sensor < NB_BS_PIN; ++Which_Sensor){
+          temp_elapsed_time = micros() - start_time;         
+          if(digitalRead(bs_pin[Which_Sensor]) == LOW || temp_elapsed_time > TIME_OUT){
+            if(max_elapsed_time[Which_Sensor] < temp_elapsed_time && temp_elapsed_time < TIME_OUT) max_elapsed_time[Which_Sensor] = temp_elapsed_time;
+            if(min_elapsed_time[Which_Sensor] > temp_elapsed_time && temp_elapsed_time > MIN_TIME) min_elapsed_time[Which_Sensor] = temp_elapsed_time;
+          }
+        }
+        if(temp_elapsed_time > CALIBRATION_TIME){
+          done = true;     
+          calculateScalingFactor();
+        }
+      }
+    }
+    
+    void Read_Bump_Sensors(){
+      unsigned long temp_elapsed_time;
+      PT_Charge();
+      Start_Time();
+      while(done == false){    
+        for(int Which_Sensor = 0; Which_Sensor < NB_BS_PIN; ++Which_Sensor){
+          temp_elapsed_time = micros() - start_time;         
+        if((digitalRead(bs_pin[Which_Sensor]) == LOW /*|| temp_elapsed_time > TIME_OUT*/) && !read_end[Which_Sensor]){
+            Which_Sensor == 0 ? SUM[Which_Sensor] -= Left_Readings[INDEX]: SUM[Which_Sensor] -= Right_Readings[INDEX];
+            Serial.print("\n");
+            Serial.print("SUM0: ");
+            Serial.print(SUM[0]);
+            Serial.print(" SUM1: ");
+            Serial.print(SUM[1]);
+            Serial.print("\n");
+            Serial.print("ARRAY: ");
+            Serial.println("1");
+            for(int k = 0; k < WINDOW_SIZE; ++k) { Serial.print(Right_Readings[k]); Serial.print(" ");}
+            Serial.print("\n");
+            Serial.print("ARRAY: ");
+            Serial.println("2");
+            for(int k = 0; k < WINDOW_SIZE; ++k) { Serial.print(Left_Readings[k]); Serial.print(" ");}
+            elapsed_time[Which_Sensor] = temp_elapsed_time;
+            read_end[Which_Sensor] = true;
+            Which_Sensor == 0 ?  Right_Readings[INDEX] = temp_elapsed_time : Left_Readings[INDEX] = temp_elapsed_time;
+            SUM[Which_Sensor] += temp_elapsed_time;
+            AVERAGE[Which_Sensor] = static_cast<float>(SUM[Which_Sensor])/WINDOW_SIZE;
+          }
+        }
+        if(elapsed_time[0] != 0 && elapsed_time[1] !=  0){
+          done = true;
+          INDEX = (INDEX+1) % WINDOW_SIZE;
+          Display_Lapsed_Time();
+          getSensorCalibrationValue();
+        }
+      }
+    }
+        
+    void getSensorCalibrationValue(){
+      for(int i = 0; i < NB_BS_PIN; ++i){
+        if(elapsed_time[i] < min_elapsed_time[i]){
+          min_elapsed_time[i] = elapsed_time[i];
+          calculateScalingFactor();
+        }
+        sensors_measured_condition[i] = (elapsed_time[i] - min_elapsed_time[i]) * sensors_calibration_factor[i];
+      }
+    }
+
+    double getErrorLine(){
+              return (sensors_measured_condition[0] - sensors_measured_condition[1]);
+    }
+    
+    unsigned long Sensor_Time_Elapsed(int sensor){
+      return elapsed_time[sensor];
+    }
+
+    void Display_Lapsed_Time(){
+//      Serial.print("\nFINISHED!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+//      Serial.print("\nBump sensor FINAL VALUES!: ");
+      Serial.print(elapsed_time[0], 8);
+      Serial.print(", ");
+      Serial.print(elapsed_time[1], 8);
+      Serial.print("\n");
+//      Serial.println(AVERAGE[0], 8);
+    }
+    
+  private:
+    const int bs_pin[NB_BS_PIN] = {LEFT_BUMP_SENSOR, RIGHT_BUMP_SENSOR};
+    bool read_end[NB_BS_PIN];
+    bool done;
+    double SUM[NB_BS_PIN] = { 0 };
+    float AVERAGE[NB_BS_PIN] = { 0 };
+    unsigned long Right_Readings[WINDOW_SIZE] = { 0 };
+    unsigned long Left_Readings[WINDOW_SIZE] = { 0 }; 
+    unsigned long start_time; //t_1
+    unsigned long elapsed_time[NB_BS_PIN] = { 0 }; //to store elapsed time
+    unsigned long max_elapsed_time[NB_BS_PIN] = { 0 }; //to store max discharge time duting Calibration
+    unsigned long min_elapsed_time[NB_BS_PIN] = { TIME_OUT, TIME_OUT}; //to store min discharge time during Calibration
+    double sensors_calibration_factor[NB_BS_PIN] = { 0 };
+    float sensors_measured_condition[NB_BS_PIN] = { 0 };
+    float calibration_factor;
+    void Start_Time(){
+      start_time = micros(); 
+    }
+
+    //function to perform charge and start discharge time
+    void PT_Charge(){
+      for(int k = 0; k < NB_BS_PIN; ++k) elapsed_time[k] = 0;
+      for(int k = 0; k < NB_BS_PIN; ++k) read_end[k] = false;
+      for(int i = 0; i < NB_BS_PIN; ++i) pinMode(bs_pin[i], OUTPUT);
+      for(int j = 0; j < NB_BS_PIN; ++j) digitalWrite(bs_pin[j], HIGH);
+      delayMicroseconds(30);
+      done = false;
+      for(int i = 0; i < NB_BS_PIN; ++i) pinMode(bs_pin[i], INPUT);
+//      Serial.print("\nDone Charging and starts Discharging");
+      unsigned long temp_elapsed_time;
+      Start_Time();
+    }
+
+    void calculateScalingFactor(){
+      for(int i = 0; i < NB_BS_PIN; ++i){
+        sensors_calibration_factor[i] = (static_cast<double>(1) / (max_elapsed_time[i] - min_elapsed_time[i]));
+      }
+      Serial.print("\nFINISHED CALIBRATION!!!!!!");
+      Serial.print(sensors_calibration_factor[0]);
+      Serial.print(", ");
+      Serial.println(sensors_calibration_factor[1]);
+    }
+};
+#endif
