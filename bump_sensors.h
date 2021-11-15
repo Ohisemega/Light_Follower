@@ -4,7 +4,7 @@
 #ifndef _BUMPSENSOR_H
 #define _BUMPSENSOR_H
 
-#define WINDOW_SIZE 15
+#define WINDOW_SIZE 10
 #define LEFT_BUMP_SENSOR 4
 #define RIGHT_BUMP_SENSOR 5
 #define NB_BS_PIN 2
@@ -27,6 +27,7 @@ class BumpSensor_c {
     int INDEX = 0;
     void initialise(){
       for(int i = 0; i < NB_BS_PIN; ++i) pinMode(bs_pin[i], INPUT);
+      for(int i = 0; i < NB_BS_PIN; ++i) SUM[i] = 0;
       pinMode(EMIT_PIN, OUTPUT);
       digitalWrite(EMIT_PIN, LOW);
       Serial.println("***The setup is Complete");
@@ -58,24 +59,11 @@ class BumpSensor_c {
       while(done == false){    
         for(int Which_Sensor = 0; Which_Sensor < NB_BS_PIN; ++Which_Sensor){
           temp_elapsed_time = micros() - start_time;         
-        if((digitalRead(bs_pin[Which_Sensor]) == LOW /*|| temp_elapsed_time > TIME_OUT*/) && !read_end[Which_Sensor]){
-            Which_Sensor == 0 ? SUM[Which_Sensor] -= Left_Readings[INDEX]: SUM[Which_Sensor] -= Right_Readings[INDEX];
-            Serial.print("\n");
-            Serial.print("SUM0: ");
-            Serial.print(SUM[0]);
-            Serial.print(" SUM1: ");
-            Serial.print(SUM[1]);
-            Serial.print("\n");
-            Serial.print("ARRAY: ");
-            Serial.println("1");
-            for(int k = 0; k < WINDOW_SIZE; ++k) { Serial.print(Right_Readings[k]); Serial.print(" ");}
-            Serial.print("\n");
-            Serial.print("ARRAY: ");
-            Serial.println("2");
-            for(int k = 0; k < WINDOW_SIZE; ++k) { Serial.print(Left_Readings[k]); Serial.print(" ");}
+          if((digitalRead(bs_pin[Which_Sensor]) == LOW /*|| temp_elapsed_time > TIME_OUT*/) && !read_end[Which_Sensor]){
+            Which_Sensor == 0 ?  SUM[Which_Sensor] -= Left_Readings[INDEX] : SUM[Which_Sensor] -= Right_Readings[INDEX];
             elapsed_time[Which_Sensor] = temp_elapsed_time;
             read_end[Which_Sensor] = true;
-            Which_Sensor == 0 ?  Right_Readings[INDEX] = temp_elapsed_time : Left_Readings[INDEX] = temp_elapsed_time;
+            Which_Sensor == 0 ?  Left_Readings[INDEX] = temp_elapsed_time : Right_Readings[INDEX] = temp_elapsed_time;
             SUM[Which_Sensor] += temp_elapsed_time;
             AVERAGE[Which_Sensor] = static_cast<float>(SUM[Which_Sensor])/WINDOW_SIZE;
           }
@@ -84,7 +72,7 @@ class BumpSensor_c {
           done = true;
           INDEX = (INDEX+1) % WINDOW_SIZE;
           Display_Lapsed_Time();
-          getSensorCalibrationValue();
+          //getSensorCalibrationValue();
         }
       }
     }
@@ -110,11 +98,12 @@ class BumpSensor_c {
     void Display_Lapsed_Time(){
 //      Serial.print("\nFINISHED!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
 //      Serial.print("\nBump sensor FINAL VALUES!: ");
-      Serial.print(elapsed_time[0], 8);
-      Serial.print(", ");
-      Serial.print(elapsed_time[1], 8);
-      Serial.print("\n");
-//      Serial.println(AVERAGE[0], 8);
+          Serial.print("\nThe current sensor values are: ");
+          Serial.print(elapsed_time[0]);
+          Serial.print(", ");
+//          Serial.print(elapsed_time[1]);
+//          Serial.print("\n");
+          Serial.println(AVERAGE[0]);
     }
     
   private:
